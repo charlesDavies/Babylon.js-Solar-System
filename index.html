@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+
+    <title>Space</title>
+
+    <!-- Babylon.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.6.2/dat.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/ammo.js"></script>
+    <script src="https://preview.babylonjs.com/cannon.js"></script>
+    <script src="https://preview.babylonjs.com/Oimo.js"></script>
+    <script src="https://preview.babylonjs.com/earcut.min.js"></script>
+    <script src="https://preview.babylonjs.com/babylon.js"></script>
+    <script src="https://preview.babylonjs.com/materialsLibrary/babylonjs.materials.min.js"></script>
+    <script src="https://preview.babylonjs.com/proceduralTexturesLibrary/babylonjs.proceduralTextures.min.js"></script>
+    <script src="https://preview.babylonjs.com/postProcessesLibrary/babylonjs.postProcess.min.js"></script>
+    <script src="https://preview.babylonjs.com/loaders/babylonjs.loaders.js"></script>
+    <script src="https://preview.babylonjs.com/serializers/babylonjs.serializers.min.js"></script>
+    <script src="https://preview.babylonjs.com/gui/babylon.gui.min.js"></script>
+    <script src="https://preview.babylonjs.com/inspector/babylon.inspector.bundle.js"></script>
+    <script>"https://cdn.babylonjs.com/gui/babylon.gui.min.js"</script>
+
+    <style>
+        html,
+        body {
+            overflow: hidden;
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #renderCanvas {
+            width: 100%;
+            height: 100%;
+            touch-action: none;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="renderCanvas"></canvas>
+    <script>
+        var canvas = document.getElementById("renderCanvas");
+
+        var engine = null;
+        var scene = null;
+        var sceneToRender = null;
+        var createDefaultEngine = function () { return new BABYLON.Engine(canvas, true, { preserveDrawingBuffer: true, stencil: true, disableWebGL2Support: false }); };
+        var createScene = function () {
+            var scene = new BABYLON.Scene(engine);
+            var camera = new BABYLON.ArcRotateCamera("Camera", -Math.PI / 2, Math.PI / 2, 5, BABYLON.Vector3.Zero(), scene);
+            camera.wheelPrescision = 50;
+            camera.attachControl(canvas, true);
+
+            
+
+            var light = new BABYLON.PointLight("pointLight", new BABYLON.Vector3(0, 1, 0), scene);
+            light.intensity = 2.5;
+            light.range = 1000;
+
+
+
+
+
+            var skybox = BABYLON.MeshBuilder.CreateBox("skyBox", { size: 1500.0 }, scene);
+            var skyboxMaterial = new BABYLON.StandardMaterial("skyBox", scene);
+            skyboxMaterial.backFaceCulling = false;
+            skyboxMaterial.reflectionTexture = new BABYLON.CubeTexture("cosmos", scene);
+            skyboxMaterial.reflectionTexture.coordinatesMode = BABYLON.Texture.SKYBOX_MODE;
+            skyboxMaterial.diffuseColor = new BABYLON.Color3(0, 0, 0);
+            skyboxMaterial.specularColor = new BABYLON.Color3(0, 0, 0);
+            skybox.material = skyboxMaterial;
+
+            // SUN ------------------------------------------------------------------------------------------------------------------------------
+            //var sun = BABYLON.MeshBuilder.CreateSphere("sun", { diameter: 50 }, scene);
+            //light.parent = sun;
+            //created a second light that only lights up the sun, otherwise the sun would be pitch black
+            var light2 = new BABYLON.HemisphericLight("hemiLight", new BABYLON.Vector3(-1, 1, 0), scene);
+            //light2.includedOnlyMeshes.push(sun);
+            //const sunMat = new BABYLON.StandardMaterial("sunMat");
+            //sunMat.diffuseTexture = new BABYLON.Texture("sun.png");
+            //sun.material = sunMat;
+
+            // var sun2 = BABYLON.ParticleHelper.CreateAsync("sun", scene).then((set) => {
+            //     for (const sys of set.systems) {
+            //         sys.maxScaleX = 5;
+            //         sys.maxScaleY = 5;
+            //         sys.maxSize = 1;
+            //         sys.size = 10;
+            //     }
+
+            //     console.log(set.systems);
+            //     set.start();
+            // });
+
+
+            const particleSystem = new BABYLON.ParticleSystem("particles", 4000);
+            particleSystem.particleTexture = new BABYLON.Texture("flare.png");
+            particleSystem.emitter = new BABYLON.Vector3(0, 0, 0);
+            particleSystem.minSize = 80;
+            particleSystem.maxSize = 100;
+            particleSystem.color1 = new BABYLON.Color4(0.7, 1, 1, 1.0);
+            particleSystem.color2 = new BABYLON.Color4(1.5, 0.5, 0.5, 0.5);
+            particleSystem.colorDead = new BABYLON.Color4(0.3, 0, 0, 2);
+            particleSystem.minAngularSpeed = 0;
+            particleSystem.maxAngularSpeed = 0.2;
+
+
+
+            particleSystem.start();
+
+
+            // PLANET ONE ------------------------------------------------------------------------------------------------------------------------
+            var planet = BABYLON.MeshBuilder.CreateSphere("shape", { diameter: 15 }, scene);
+            planet.position.x = 100;
+            const planetMat = new BABYLON.StandardMaterial("planetMat");
+            planetMat.diffuseTexture = new BABYLON.Texture("planet2.png");
+            planet.material = planetMat;
+            const animPlanet = new BABYLON.Animation("planetAnimation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+
+            const keyFrames = [];
+
+            keyFrames.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFrames.push({
+                frame: 30,
+                value: 0.5
+            });
+
+            animPlanet.setKeys(keyFrames);
+            planet.animations.push(animPlanet);
+            scene.beginAnimation(planet, 0, 30, true);
+
+            var CoR_At = new BABYLON.Vector3(0, 0, 0);
+            var axis = new BABYLON.Vector3(0, 50, 0);
+            var planetStart = new BABYLON.Vector3(100, 0, 0);
+
+            var pivot = new BABYLON.TransformNode("root");
+            pivot.position = CoR_At;
+
+            planet.parent = pivot;
+            planet.position = planetStart;
+
+            var angle = 0.008;
+            scene.registerAfterRender(function () {
+                pivot.rotate(axis, angle, BABYLON.Space.WORLD);
+            })
+
+            var trail = false;
+
+            //function trailChange(){
+
+            var planetTrail = new BABYLON.TrailMesh('new', planet, scene, 2, 650, true);
+
+            var trailMat = new BABYLON.StandardMaterial('trailMat', scene);
+            trailMat.emissiveColor =
+                trailMat.diffuseColor = new BABYLON.Color3.Green();
+            //trailMat.specularColor = new BABYLON.Color3.Black();
+            trailMat.alpha = 0;
+
+            planetTrail.material = trailMat;
+
+
+            // }
+
+
+
+
+            // PLANET ONE ---------------------------------------------------------------------------------------------------------------------
+
+
+            //PLANET ONE'S MOON-------------------------------------------------------------------------------------------------------------------
+            var moon = BABYLON.MeshBuilder.CreateSphere("shape", { diameter: 6 }, scene);
+            moon.position.x = 130;
+            const moonMat = new BABYLON.StandardMaterial("moonMat");
+            moonMat.diffuseTexture = new BABYLON.Texture("moon.jpg");
+            moon.material = moonMat;
+            //moon.parent = planet;
+
+            const animMoon = new BABYLON.Animation("moonAnimation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+            const keyFramesMoon = [];
+
+            keyFramesMoon.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFramesMoon.push({
+                frame: 30,
+                value: 4
+            });
+
+            animMoon.setKeys(keyFramesMoon);
+            moon.animations.push(animMoon);
+            scene.beginAnimation(moon, 0, 30, true);
+
+            var CoR_At2 = new BABYLON.Vector3(0, 0, 0);
+            var axis2 = new BABYLON.Vector3(0, 50, 0);
+            var moonStart = new BABYLON.Vector3(25, 0, 0);
+
+            var pivot2 = new BABYLON.TransformNode("root");
+            pivot2.position = CoR_At2;
+
+            moon.parent = pivot2;
+            pivot2.parent = planet
+            moon.position = moonStart;
+
+            var angle2 = 0.02;
+            scene.registerAfterRender(function () {
+                pivot2.rotate(axis2, angle2, BABYLON.Space.WORLD);
+            })
+
+            //camera2.lockedTarget = moon;
+
+            // PLANET 2*************************************************************************************************************************
+
+            var planet2 = BABYLON.MeshBuilder.CreateSphere("planet2", { diameter: 10 }, scene);
+            planet2.position.x = -70;
+            const planet2Mat = new BABYLON.StandardMaterial("planet2Mat");
+            planet2Mat.diffuseTexture = new BABYLON.Texture("planet3.png");
+            planet2.material = planet2Mat;
+            const animPlanet2 = new BABYLON.Animation("planet2Animation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+
+
+            const keyFramesPlanet2 = [];
+
+            keyFramesPlanet2.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFramesPlanet2.push({
+                frame: 30,
+                value: 2
+            });
+
+            animPlanet2.setKeys(keyFramesPlanet2);
+            planet2.animations.push(animPlanet2);
+            scene.beginAnimation(planet2, 0, 30, true);
+
+            var CoR_At3 = new BABYLON.Vector3(0, 0, 0);
+            var axis3 = new BABYLON.Vector3(20, 100, 20);
+            var planet2Start = new BABYLON.Vector3(-47, 0, 0);
+
+            var pivot3 = new BABYLON.TransformNode("root");
+            pivot3.position = CoR_At3;
+
+            planet2.parent = pivot3;
+            planet2.position = planet2Start;
+
+            var angle3 = -0.01;
+            scene.registerAfterRender(function () {
+                pivot3.rotate(axis3, angle3, BABYLON.Space.WORLD);
+            })
+
+            var planetTrail2 = new BABYLON.TrailMesh('new2', planet2, scene, 2, 650, true);
+
+            var trailMat2 = new BABYLON.StandardMaterial('trailMat2', scene);
+            trailMat2.emissiveColor =
+                trailMat2.diffuseColor = new BABYLON.Color3.Red();
+            //trailMat2.specularColor = new BABYLON.Color3.Black();
+            trailMat2.alpha = 0;
+
+            planetTrail2.material = trailMat2;
+
+            //moon2******************************************************************************************************************************
+            var moon2 = BABYLON.MeshBuilder.CreateSphere("shape", { diameter: 3 }, scene);
+            moon2.position.x = 130;
+            const moon2Mat = new BABYLON.StandardMaterial("moon2Mat");
+            moon2Mat.diffuseTexture = new BABYLON.Texture("moon.jpg");
+            moon2.material = moon2Mat;
+
+
+            const animMoon2 = new BABYLON.Animation("moon2Animation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+            const keyFramesMoon2 = [];
+
+            keyFramesMoon2.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFramesMoon2.push({
+                frame: 30,
+                value: 5
+            });
+
+            animMoon2.setKeys(keyFramesMoon2);
+            moon2.animations.push(animMoon2);
+            scene.beginAnimation(moon2, 0, 30, true);
+
+            var CoR_At4 = new BABYLON.Vector3(0, 0, 0);
+            var axis4 = new BABYLON.Vector3(20, 100, 20);
+            var moon2Start = new BABYLON.Vector3(-10, 0, 0);
+
+            var pivot4 = new BABYLON.TransformNode("root");
+            pivot4.position = CoR_At4;
+
+            moon2.parent = pivot4;
+            pivot4.parent = planet2
+            moon2.position = moon2Start;
+
+            var angle4 = -0.05;
+            scene.registerAfterRender(function () {
+                pivot4.rotate(axis4, angle4, BABYLON.Space.WORLD);
+            })
+            //PLANET 3*****************************************************************************************************************************8
+            var planet3 = BABYLON.MeshBuilder.CreateSphere("planet3", { diameter: 20 }, scene);
+            planet3.position.x = -190;
+            const planet3Mat = new BABYLON.StandardMaterial("planet3Mat");
+            planet3Mat.diffuseTexture = new BABYLON.Texture("planet4.png");
+            planet3.material = planet3Mat;
+            const animPlanet3 = new BABYLON.Animation("planet3Animation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+
+
+            const keyFramesPlanet3 = [];
+
+            keyFramesPlanet3.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFramesPlanet3.push({
+                frame: 30,
+                value: 2
+            });
+
+            animPlanet3.setKeys(keyFramesPlanet3);
+            planet3.animations.push(animPlanet3);
+            scene.beginAnimation(planet3, 0, 30, true);
+
+            var CoR_At5 = new BABYLON.Vector3(0, 0, 0);
+            var axis5 = new BABYLON.Vector3(10, 100, 10);
+            var planet3Start = new BABYLON.Vector3(-190, 0, 0);
+
+            var pivot5 = new BABYLON.TransformNode("root");
+            pivot5.position = CoR_At5;
+
+            planet3.parent = pivot5;
+            planet3.position = planet3Start;
+
+            var angle5 = -0.003;
+            scene.registerAfterRender(function () {
+                pivot5.rotate(axis5, angle5, BABYLON.Space.WORLD);
+            })
+
+            var planetTrail3 = new BABYLON.TrailMesh('new3', planet3, scene, 2, 2000, true);
+
+            var trailMat3 = new BABYLON.StandardMaterial('trailMat3', scene);
+            trailMat3.emissiveColor =
+                trailMat3.diffuseColor = new BABYLON.Color3.Blue();
+            //trailMat2.specularColor = new BABYLON.Color3.Black();
+            trailMat3.alpha = 0;
+
+            planetTrail3.material = trailMat3;
+            // MOON 3******************************************************************************************************************************************************8
+            var moon3 = BABYLON.MeshBuilder.CreateSphere("shape", { diameter: 7 }, scene);
+            moon3.position.x = -200;
+            moon3.material = moon2Mat;
+
+
+            moon3.animations.push(animMoon2);
+            scene.beginAnimation(moon3, 0, 30, true);
+
+            var CoR_At6 = new BABYLON.Vector3(0, 0, 0);
+            var axis6 = new BABYLON.Vector3(0, 0, 0);
+            var moon3Start = new BABYLON.Vector3(-20, 0, 0);
+
+            var pivot6 = new BABYLON.TransformNode("root");
+            pivot6.position = CoR_At6;
+
+            moon3.parent = pivot6;
+            pivot6.parent = planet3
+            moon3.position = moon3Start;
+
+            var angle6 = 0.05;
+            scene.registerAfterRender(function () {
+                pivot6.rotate(axis6, angle6, BABYLON.Space.WORLD);
+            })
+            // MOON 4******************************************************************************************************************************8
+            var moon4 = BABYLON.MeshBuilder.CreateSphere("shape", { diameter: 3 }, scene);
+            moon4.position.x = -40;
+            moon4.material = moon2Mat;
+
+
+            moon4.animations.push(animMoon2);
+            scene.beginAnimation(moon4, 0, 30, true);
+
+            var CoR_At7 = new BABYLON.Vector3(20, 0, 30);
+            var axis7 = new BABYLON.Vector3(0, 0, 0);
+            var moon4Start = new BABYLON.Vector3(-40, 0, 0);
+
+            var pivot7 = new BABYLON.TransformNode("root");
+
+            CoR_At7.parent = planet3;
+            pivot7.position = CoR_At7;
+            moon4.parent = pivot7;
+            pivot7.parent = planet3
+            moon4.position = moon4Start;
+
+            var angle7 = -0.9;
+            scene.registerAfterRender(function () {
+                pivot7.rotate(axis7, angle7, BABYLON.Space.WORLD);
+            })
+
+            // PLANET 4 *********************************************************************************************************************************************************************888
+            var planet4 = BABYLON.MeshBuilder.CreateSphere("planet4", { diameter: 22 }, scene);
+            planet4.position.x = 250;
+            const planet4Mat = new BABYLON.StandardMaterial("planet4Mat");
+            planet4Mat.diffuseTexture = new BABYLON.Texture("saturn.jpg");
+            planet4.material = planet4Mat;
+
+
+            const torus = BABYLON.MeshBuilder.CreateTorus("torus", { thickness: 4.25, diameter: 33, tessellation: 200 });
+            torus.scaling = new BABYLON.Vector3(1, 0.001, 1)
+            torus.parent = planet4;
+            const torusMat = new BABYLON.StandardMaterial("torusMat");
+            torusMat.diffuseTexture = new BABYLON.Texture("saturn.jpg");
+            torus.material = torusMat;
+
+            const animPlanet4 = new BABYLON.Animation("planet4Animation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+
+
+
+
+            const keyFramesPlanet4 = [];
+
+            keyFramesPlanet4.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFramesPlanet4.push({
+                frame: 30,
+                value: 0.5
+            });
+
+            animPlanet4.setKeys(keyFramesPlanet4);
+            planet4.animations.push(animPlanet4);
+            scene.beginAnimation(planet4, 0, 30, true);
+
+            var CoR_At8 = new BABYLON.Vector3(0, 0, 0);
+            var axis8 = new BABYLON.Vector3(0, 20, 0);
+            var planet4Start = new BABYLON.Vector3(250, 0, 0);
+
+            var pivot8 = new BABYLON.TransformNode("root");
+            pivot8.position = CoR_At8;
+
+            planet4.parent = pivot8;
+            planet4.position = planet4Start;
+
+            var angle8 = 0.001;
+            scene.registerAfterRender(function () {
+                pivot8.rotate(axis8, angle8, BABYLON.Space.WORLD);
+            })
+
+            var planetTrail4 = new BABYLON.TrailMesh('new4', planet4, scene, 2, 2000, true);
+
+            var trailMat4 = new BABYLON.StandardMaterial('trailMat4', scene);
+            trailMat4.emissiveColor =
+                trailMat4.diffuseColor = new BABYLON.Color3.Yellow();
+            //trailMat4.specularColor = new BABYLON.Color3.Black();
+            trailMat4.alpha = 0;
+
+            planetTrail4.material = trailMat4;
+            // PLANET 5********************************************************************************************************************************************************8888
+            var planet5 = BABYLON.MeshBuilder.CreateSphere("planet5", { diameter: 27 }, scene);
+            planet5.position.x = -290;
+            const planet5Mat = new BABYLON.StandardMaterial("planet5Mat");
+            planet5Mat.diffuseTexture = new BABYLON.Texture("planet6.png");
+            planet5.material = planet5Mat;
+            const animPlanet5 = new BABYLON.Animation("planet5Animation", "rotation.y", 30, BABYLON.Animation.ANIMATIONTYPE_FLOAT, BABYLON.Animation.ANIMATIONLOOPMODE_RELATIVE);
+
+
+            const keyFramesPlanet5 = [];
+
+            keyFramesPlanet5.push({
+                frame: 0,
+                value: 0
+            });
+
+            keyFramesPlanet5.push({
+                frame: 30,
+                value: -0.2
+            });
+
+            animPlanet5.setKeys(keyFramesPlanet5);
+            planet5.animations.push(animPlanet5);
+            scene.beginAnimation(planet5, 0, 30, true);
+
+            var CoR_At9 = new BABYLON.Vector3(0, 0, 0);
+            var axis9 = new BABYLON.Vector3(0, 40, 0);
+            var planet5Start = new BABYLON.Vector3(-290, 0, 0);
+
+            var pivot9 = new BABYLON.TransformNode("root");
+            pivot9.position = CoR_At9;
+
+            planet5.parent = pivot9;
+            planet5.position = planet5Start;
+
+            var angle9 = 0.003;
+            scene.registerAfterRender(function () {
+                pivot9.rotate(axis9, angle9, BABYLON.Space.WORLD);
+            })
+
+            var planetTrail5 = new BABYLON.TrailMesh('new5', planet5, scene, 2, 2000, true);
+
+            var trailMat5 = new BABYLON.StandardMaterial('trailMat5', scene);
+            trailMat5.emissiveColor =
+                trailMat5.diffuseColor = new BABYLON.Color3.Purple();
+            //trailMat5.specularColor = new BABYLON.Color3.Black();
+            trailMat5.alpha = 0;
+            planetTrail5.material = trailMat5;
+
+            // ASTEROIDS******************************************************************************************************************************************************88
+            const asteroids = new BABYLON.SolidParticleSystem("asteroids", scene);
+            var sphere = BABYLON.MeshBuilder.CreateSphere("s", {
+                segments: 4,
+                diameterX: Math.random() * 3.2,
+                diameterY: Math.random() * 1.1,
+                diameterZ: Math.random() * 1.3,
+                updatable: true
+
+            }, scene);
+            sphere.forceSharedVertices();
+            var positions = sphere.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+            var numberOfVertices = positions.length / 2;
+            for (var i = 0; i < numberOfVertices; i++) {
+                positions[i * 2] += Math.random() * 0.01;
+                positions[i * 2 + 1] += Math.random() * 0.01;
+                positions[i * 2 + 2] += Math.random() * 0.01;
+
+            }
+            sphere.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions);
+
+            const displacementmap = "moon2.jpg"; // NOT WORKING
+            sphere.applyDisplacementMap(displacementmap, 0.1, 1); // NOT WORKING
+
+
+            asteroids.addShape(sphere, 1500);
+            sphere.dispose();
+
+
+            const mesh = asteroids.buildMesh();
+            mesh.applyDisplacementMap(displacementmap, 0.1, 1);
+            mesh.material = moonMat;
+
+            asteroids.initParticles = () => {
+                for (let p = 0; p < asteroids.nbParticles; p++) {
+                    const particle = asteroids.particles[p];
+
+                    particle.position.x = BABYLON.Scalar.RandomRange(-500, 500);
+                    particle.position.y = BABYLON.Scalar.RandomRange(-100, -210);
+                    particle.position.z = BABYLON.Scalar.RandomRange(-500, 500);
+
+
+                }
+            };
+
+            asteroids.material = moonMat;
+
+
+
+            asteroids.initParticles();
+            asteroids.setParticles();
+
+            const asteroids2 = new BABYLON.SolidParticleSystem("asteroids2", scene);
+            var sphere2 = BABYLON.MeshBuilder.CreateSphere("s", {
+                segments: 4,
+                diameterX: Math.random() * 3.2,
+                diameterY: Math.random() * 1.1,
+                diameterZ: Math.random() * 1.3,
+                updatable: true
+
+            }, scene);
+            sphere2.forceSharedVertices();
+            var positions2 = sphere2.getVerticesData(BABYLON.VertexBuffer.PositionKind);
+            var numberOfVertices2 = positions.length2 / 2;
+            for (var i = 0; i < numberOfVertices2; i++) {
+                positions2[i * 2] += Math.random() * 0.01;
+                positions2[i * 2 + 1] += Math.random() * 0.01;
+                positions2[i * 2 + 2] += Math.random() * 0.01;
+
+            }
+            sphere2.updateVerticesData(BABYLON.VertexBuffer.PositionKind, positions2);
+
+            const displacementmap2 = "moon2.jpg"; // NOT WORKING
+            sphere2.applyDisplacementMap(displacementmap2, 0.1, 1); // NOT WORKING
+
+
+            asteroids2.addShape(sphere2, 2000);
+            sphere2.dispose();
+
+
+            const mesh2 = asteroids2.buildMesh();
+            mesh2.applyDisplacementMap(displacementmap2, 0.1, 1);
+            mesh2.material = moonMat;
+
+            asteroids2.initParticles = () => {
+                for (let p = 0; p < asteroids2.nbParticles; p++) {
+                    const particle2 = asteroids2.particles[p];
+
+                    particle2.position.x = BABYLON.Scalar.RandomRange(-600, 600);
+                    particle2.position.y = BABYLON.Scalar.RandomRange(300, 410);
+                    particle2.position.z = BABYLON.Scalar.RandomRange(-600, 600);
+
+
+                }
+            };
+
+            asteroids2.material = moonMat;
+
+
+
+            asteroids2.initParticles();
+            asteroids2.setParticles();
+
+
+
+
+
+
+
+
+
+
+
+
+
+            //GUI*********************************************************************************************************************************
+            const adt = BABYLON.GUI.AdvancedDynamicTexture.CreateFullscreenUI("UI");
+
+            const panel = new BABYLON.GUI.StackPanel();
+            panel.width = "220px";
+            panel.top = "-50";
+            panel.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_RIGHT;
+            panel.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+            adt.addControl(panel);
+
+            const header = new BABYLON.GUI.TextBlock();
+            header.text = "Planet Controls";
+            header.height = "30px";
+            header.color = "white";
+            panel.addControl(header);
+
+            const slider = new BABYLON.GUI.Slider();
+            slider.minimum = 0.001;
+            slider.maximum = 0.5;
+            slider.borderColor = "black";
+            slider.color = "#AAAAAA";
+            slider.background = "#white";
+            slider.value = 0.001;
+            slider.height = "20px";
+            slider.width = "200px";
+            panel.addControl(slider);
+
+            const slider2 = new BABYLON.GUI.Slider();
+            slider2.minimum = -0.5;
+            slider2.maximum = -0.001;
+            slider2.borderColor = "black";
+            slider2.color = "#AAAAAA";
+            slider2.background = "#white";
+            slider2.value = 0.001;
+            slider2.height = "20px";
+            slider2.width = "200px";
+            panel.addControl(slider2);
+
+            const slider3 = new BABYLON.GUI.Slider();
+            slider3.minimum = -0.5;
+            slider3.maximum = -0.001;
+            slider3.borderColor = "black";
+            slider3.color = "#AAAAAA";
+            slider3.background = "#white";
+            slider3.value = 0.001;
+            slider3.height = "20px";
+            slider3.width = "200px";
+            panel.addControl(slider3);
+
+            const slider4 = new BABYLON.GUI.Slider();
+            slider4.minimum = 0.001;
+            slider4.maximum = 0.5;
+            slider4.borderColor = "black";
+            slider4.color = "#AAAAAA";
+            slider4.background = "#white";
+            slider4.value = 0.001;
+            slider4.height = "20px";
+            slider4.width = "200px";
+            panel.addControl(slider4);
+
+            const slider5 = new BABYLON.GUI.Slider();
+            slider5.minimum = 0.001;
+            slider5.maximum = 0.5;
+            slider5.borderColor = "black";
+            slider5.color = "#AAAAAA";
+            slider5.background = "#white";
+            slider5.value = 0.001;
+            slider5.height = "20px";
+            slider5.width = "200px";
+            panel.addControl(slider5);
+
+
+            slider.onValueChangedObservable.add((value) => {
+                if (angle) {
+                    angle = value;
+                }
+            });
+
+            slider2.onValueChangedObservable.add((value) => {
+                if (angle3) {
+                    angle3 = value;
+                }
+            });
+
+            slider3.onValueChangedObservable.add((value) => {
+                if (angle5) {
+                    angle5 = value;
+                }
+            });
+
+            slider4.onValueChangedObservable.add((value) => {
+                if (angle8) {
+                    angle8 = value;
+                }
+            });
+
+            slider5.onValueChangedObservable.add((value) => {
+                if (angle9) {
+                    angle9 = value;
+                }
+            });
+
+            var panel2 = new BABYLON.GUI.StackPanel();
+            panel2.width = "220px";
+            panel2.top = "-50px";
+            panel2.isVertical = false;
+            panel2.horizontalAlignment = BABYLON.GUI.Control.HORIZONTAL_ALIGNMENT_LEFT;
+            panel2.verticalAlignment = BABYLON.GUI.Control.VERTICAL_ALIGNMENT_BOTTOM;
+            adt.addControl(panel2);
+
+            var checkbox = new BABYLON.GUI.Checkbox();
+            checkbox.width = "20px";
+            checkbox.height = "20px";
+            checkbox.isChecked = false;
+            checkbox.color = "green";
+            checkbox.onIsCheckedChangedObservable.add(function (value) {
+                if (value == true) {
+                    trail = value;
+                    trailMat.alpha = 1;
+                    trailMat2.alpha = 1;
+                    trailMat3.alpha = 1;
+                    trailMat4.alpha = 1;
+                    trailMat5.alpha = 1;
+                }
+                else if (value == false) {
+                    trailMat.alpha = 0;
+                    trailMat2.alpha = 0;
+                    trailMat3.alpha = 0;
+                    trailMat4.alpha = 0;
+                    trailMat5.alpha = 0;
+
+                }
+            });
+            panel.addControl(checkbox);
+
+           
+
+
+
+
+            //GUI*********************************************************************************************************************************
+
+
+
+            const song = new BABYLON.Sound("mySong", "space.mp3", scene, null, { loop: true, autoplay: true });
+            var volume = 0.1;
+            song.setVolume(volume);
+
+
+
+            return scene;
+
+        };
+        var engine;
+        var scene;
+        initFunction = async function () {
+            var asyncEngineCreation = async function () {
+                try {
+                    return createDefaultEngine();
+                } catch (e) {
+                    console.log("the available createEngine function failed. Creating the default engine instead");
+                    return createDefaultEngine();
+                }
+            }
+
+            engine = await asyncEngineCreation();
+            if (!engine) throw 'engine should not be null.';
+            scene = createScene();
+        };
+        initFunction().then(() => {
+            sceneToRender = scene
+            engine.runRenderLoop(function () {
+                if (sceneToRender && sceneToRender.activeCamera) {
+                    sceneToRender.render();
+                }
+            });
+        });
+
+        // Resize
+        window.addEventListener("resize", function () {
+            engine.resize();
+        });
+    </script>
+</body>
+
+</html>
